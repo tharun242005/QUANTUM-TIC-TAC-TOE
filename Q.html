@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Tic-Tac-Toe</title>
+    <!-- 1. Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 2. Use the Inter font family -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        /* 3. Custom CSS for base, fonts, and animations */
+        html, body {
+            height: 100%;
+            /* overflow: hidden; <-- This was the problem, I've removed it. */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        /* Gradient text for the title */
+        .text-gradient {
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+            background-image: linear-gradient(to right, #60a5fa, #c084fc, #f87171);
+        }
+        
+        /* Player X and O colors */
+        .player-x { color: #f87171; /* red-400 */ }
+        .player-o { color: #60a5fa; /* blue-400 */ }
+        .border-x { border-color: #f87171; }
+        .border-o { border-color: #60a5fa; }
+        .bg-x { background-color: #f87171; }
+        .bg-o { background-color: #60a5fa; }
+
+        /* Animation for newly collapsed classical marks */
+        @keyframes flashIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-flash-in {
+            animation: flashIn 0.5s ease-out forwards;
+        }
+
+        /* Animation for quantum moves that are part of a cycle (entangled) */
+        @keyframes pulseGlowX {
+            0%, 100% { box-shadow: 0 0 8px #f87171; opacity: 1; }
+            50% { box-shadow: 0 0 16px #f87171; opacity: 0.7; }
+        }
+        @keyframes pulseGlowO {
+            0%, 100% { box-shadow: 0 0 8px #60a5fa; opacity: 1; }
+            50% { box-shadow: 0 0 16px #60a5fa; opacity: 0.7; }
+        }
+        .pulse-glow-x {
+            animation: pulseGlowX 1.5s infinite;
+        }
+        .pulse-glow-o {
+            animation: pulseGlowO 1.5s infinite;
+        }
+
+        /* NEW: Animation for the M gate */
+        @keyframes pulseGlowM {
+            0%, 100% { box-shadow: 0 0 8px #ef4444; opacity: 1; }
+            50% { box-shadow: 0 0 16px #ef4444; opacity: 0.7; }
+        }
+        .pulse-glow-m {
+            animation: pulseGlowM 1.5s infinite;
+        }
+
+        /* Custom scrollbar for modal */
+        .modal-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        .modal-content::-webkit-scrollbar-thumb {
+            background: #4b5563; /* gray-600 */
+            border-radius: 4px;
+        }
+        .modal-content::-webkit-scrollbar-track {
+            background: #1f2937; /* gray-800 */
+        }
+
+        /* NEW: Cursor for clickable gate */
+        .clickable-measure-gate {
+            cursor: pointer;
+        }
+
+        /* --- NEW Circuit Visualizer Styles --- */
+        .circuit-gate {
+            width: 40px;
+            height: 40px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            position: relative;
+            z-index: 5;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .gate-h { background-color: #3b82f6; /* blue-600 */ }
+        .gate-m { background-color: #ef4444; /* red-600 */ }
+        .gate-cx-control {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: #8b5cf6; /* purple-500 */
+            position: relative;
+            z-index: 5;
+        }
+        .gate-cx-target {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #8b5cf6; /* purple-500 */
+            position: relative;
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            line-height: 1;
+            padding-bottom: 4px;
+            color: white;
+            font-weight: bold;
+        }
+        .circuit-line {
+            height: 2px;
+            background-color: #4b5563; /* gray-600 */
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1;
+        }
+        .cnot-line {
+            position: absolute;
+            background-color: #8b5cf6; /* purple-500 */
+            width: 2px;
+            z-index: 3;
+        }
+
+        /* --- NEW: Win Line Animation --- */
+        .win-line {
+            position: absolute;
+            height: 10px; /* Thicker line */
+            border-radius: 5px;
+            z-index: 20;
+            transform-origin: center left;
+            transition: all 0.5s ease-out;
+            opacity: 0;
+            transform: scaleX(0); /* Animate width */
+        }
+        .win-line-x { background-color: #f87171; box-shadow: 0 0 15px #f87171, 0 0 25px #f87171; }
+        .win-line-o { background-color: #60a5fa; box-shadow: 0 0 15px #60a5fa, 0 0 25px #60a5fa; }
+
+        /* Classes to be added by JS to show the line */
+        .win-line-show {
+            opacity: 1;
+            transform: scaleX(1);
+        }
+
+        /* Line positions */
+        .win-line-row-0 { top: calc(100% / 6 - 5px); left: 5%; width: 90%; }
+        .win-line-row-1 { top: calc(100% / 2 - 5px); left: 5%; width: 90%; }
+        .win-line-row-2 { top: calc(100% * 5 / 6 - 5px); left: 5%; width: 90%; }
+        
+        /* Vertical lines are trickier, we rotate them */
+        /* UPDATED: Subtracted 5px (half line width) from 'left' to center them */
+        .win-line-col-0 { top: 5%; left: calc(100% / 6 - 5px); width: 90%; transform: rotate(90deg) scaleX(0); transform-origin: top left; }
+        .win-line-col-1 { top: 5%; left: calc(100% / 2 - 5px); width: 90%; transform: rotate(90deg) scaleX(0); transform-origin: top left; }
+        .win-line-col-2 { top: 5%; left: calc(100% * 5 / 6 - 5px); width: 90%; transform: rotate(90deg) scaleX(0); transform-origin: top left; }
+        
+        /* UPDATED: Added translateY(-5px) to center the line's thickness before rotating */
+        .win-line-diag-0 { top: 10%; left: 10%; width: 113%; transform: translateY(-5px) rotate(45deg) scaleX(0); transform-origin: top left; }
+        .win-line-diag-1 { top: 90%; left: 10%; width: 113%; transform: translateY(-5px) rotate(-45deg) scaleX(0); transform-origin: bottom left; }
+
+        /* Show classes for rotated lines */
+        /* UPDATED: Added translateY(-5px) to match the base style */
+        .win-line-col-0.win-line-show { transform: rotate(90deg) scaleX(1); }
+        .win-line-col-1.win-line-show { transform: rotate(90deg) scaleX(1); }
+        .win-line-col-2.win-line-show { transform: rotate(90deg) scaleX(1); }
+        .win-line-diag-0.win-line-show { transform: translateY(-5px) rotate(45deg) scaleX(1); }
+        .win-line-diag-1.win-line-show { transform: translateY(-5px) rotate(-45deg) scaleX(1); }
+
+
+        /* --- NEW: Gemini Tutor Spinner --- */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #60a5fa; /* blue-400 */
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 flex flex-col items-center justify-start min-h-screen p-4 pt-8">
+
+    <!-- Header -->
+    <div class="text-center mb-4">
+        <h1 class="text-4xl md:text-5xl font-black text-gradient mb-2">Quantum Tic-Tac-Toe</h1>
+        <p class="text-lg text-gray-400">Where moves are in superposition... until they're not.</p>
+    </div>
+
+    <!-- Status Message Bar -->
+    <div class="h-16 flex items-center justify-center text-center">
+        <p id="status-message" class="text-xl md:text-2xl font-semibold transition-all duration-300"></p>
+    </div>
+
+    <!-- Main Content Area: Board + Circuit -->
+    <div class="flex flex-col lg:flex-row items-start justify-center gap-8 w-full max-w-6xl px-4">
+
+        <!-- Game Board -->
+        <div id="board" class="grid grid-cols-3 gap-2 md:gap-3 bg-gray-900 p-2 rounded-lg shadow-2xl mx-auto lg:mx-0 relative">
+            <!-- 
+                NEW: We've changed the structure. 
+                The 'board' is now just the container. 
+                The 9 squares will go inside 'squares-container'.
+                The win lines are separate, so renderBoard() doesn't delete them.
+            -->
+            <div id="squares-container" class="col-span-3 grid grid-cols-3 gap-2 md:gap-3 z-10">
+                <!-- Squares will be generated by JavaScript -->
+            </div>
+            
+            <!-- Win Lines (back in static HTML, at the root of #board) -->
+            <div id="win-line-x" class="win-line win-line-x hidden"></div>
+            <div id="win-line-o" class="win-line win-line-o hidden"></div>
+        </div>
+
+        <!-- NEW: Quantum Circuit Visualizer -->
+        <div class="w-full lg:w-1/2 bg-gray-800 rounded-lg shadow-inner p-4 border border-gray-700">
+            <h2 class="text-xl font-bold text-gray-300 border-b border-gray-600 pb-2 mb-4">Quantum Circuit</h2>
+            <div id="circuit-visualizer" class="space-y-4 relative">
+                <!-- Circuit rows will be generated by JavaScript -->
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="flex items-center justify-center gap-4 mt-8">
+        <!-- How to Play Button -->
+        <button id="help-button" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-5 rounded-lg shadow-lg transition-all duration-300 transform hover:scale-105 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+            </svg>
+            How to Play
+        </button>
+        
+        <!-- NEW GEMINI BUTTON -->
+        <button id="tutor-button" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-5 rounded-lg shadow-lg transition-all duration-300 transform hover:scale-105 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" class="w-5 h-5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517M11.156 16.46A6 6 0 016.3 15.24l-2.387.477a2 2 0 00-1.022.547M16.5 19.5L12 21l-4.5-1.5" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m-6.364-2.364l.707-.707M17.657 5.343l-.707.707m-12.728 0l.707.707M17.657 18.657l-.707-.707M21 12h-1M4 12H3m14.657-6.657l.707-.707M4.343 4.343l.707.707" />
+            </svg>
+            ✨ Quantum Tutor
+        </button>
+    </div>
+
+    <!-- How to Play Modal -->
+    <div id="help-modal" class="fixed inset-0 bg-black bg-opacity-75 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden transition-opacity duration-300">
+        <div class="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-3xl border border-gray-700">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center p-5 border-b border-gray-700">
+                <h2 class="text-2xl font-bold text-gradient">How Quantum Tic-Tac-Toe Works</h2>
+                <button id="close-modal-button" class="text-gray-400 hover:text-white transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </button>
+            </div>
+            <!-- Modal Content -->
+            <div class="p-6 md:p-8 max-h-[70vh] overflow-y-auto modal-content">
+                
+                <h3 class="text-xl font-semibold player-x mb-2">The Goal</h3>
+                <p class="text-gray-300 mb-4">
+                    Get three <strong class="font-semibold text-white">classical marks</strong> (a solid 'X' or 'O') in a row, column, or diagonal. Only solid marks count!
+                </p>
+
+                <!-- NEW: Explanation for simultaneous win -->
+                <p class="text-gray-300 mb-6 bg-gray-900 p-3 rounded-lg border border-yellow-500">
+                    <strong class="font-semibold text-yellow-400">The Quantum Twist:</strong> Because a "Collapse" can place multiple marks at once, it's possible for <strong class="font-semibold text-white">both players to win at the same time!</strong> This results in a draw.
+                </p>
+
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="text-xl font-semibold player-o mb-2">1. Superposition (The `H` Gate)</h3>
+                        <p class="text-gray-300 mb-4">
+                            Instead of placing one mark, your move (e.g., $x_1$) exists in a <strong class="font-semibold text-white">superposition</strong> across <strong class="font-semibold text-white">two squares</strong>.
+                        </p>
+                        <p class="text-gray-300 mb-4">
+                            <strong class="text-white">What you do:</strong> Click two empty squares.
+                        </p>
+                        <p class="text-gray-300 mb-4">
+                            <strong class="text-white">What's happening:</strong> A new qubit (quantum bit) is added to our circuit. A <strong class="text-blue-400">Hadamard (`H`) gate</strong> is applied, putting the qubit in a 50/50 state of being in either square.
+                        </p>
+                    </div>
+                    
+                    <div class="bg-gray-900 p-4 rounded-lg flex items-center justify-center">
+                        <div class="circuit-gate gate-h">H</div>
+                    </div>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-6 mt-6">
+                    <div>
+                        <h3 class="text-xl font-semibold text-purple-400 mb-2">2. Entanglement (The `CNOT` Gate)</h3>
+                        <p class="text-gray-300 mb-4">
+                            When your move creates a <strong class="font-semibold text-white">closed loop (a "cycle")</strong> of spooky moves, all moves in that cycle become <strong class="font-semibold text-white">entangled</strong>. Their fates are now linked.
+                        </p>
+                         <p class="text-gray-300 mb-4">
+                            <strong class="text-white">What you do:</strong> Place a move that connects two existing spooky moves (e.g., $x_1$ in A-B, $o_1$ in B-C, and you place $x_2$ in C-A).
+                        </p>
+                        <p class="text-gray-300 mb-4">
+                            <strong class="text-white">What's happening:</strong> <strong class="text-purple-400">Controlled-NOT (`CNOT`) gates</strong> are applied in the circuit, linking the qubits. Now, the measurement of one *instantly* determines the state of the others. This is a <strong class_("text-purple-300")>Bell State</strong> (2 moves) or <strong class_("text-purple-300")>GHZ State</strong> (3+ moves).
+                        </p>
+                    </div>
+
+                    <div class="bg-gray-900 p-4 rounded-lg flex flex-col items-center justify-center space-y-2">
+                        <div class="gate-cx-control"></div>
+                        <div class="cnot-line" style="height: 30px; left: 50%; transform: translateX(-50%);"></div>
+                        <div class="gate-cx-target">+</div>
+                    </div>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-6 mt-6">
+                    <div>
+                        <h3 class="text-xl font-semibold text-yellow-400 mb-2">3. Collapse (The `M` Gate)</h3>
+                        <p class="text-gray-300 mb-4">
+                            When a cycle is created, the game pauses. The player who closed the cycle must <strong class="font-semibold text-white">measure</strong> one of the entangled moves.
+                        </p>
+                        <p class="text-gray-300 mb-4">
+                            <strong class="text-white">What you do:</strong> Click one of the glowing, entangled moves.
+                        </p>
+                        <p class="text-gray-300 mb-4">
+                            <strong class="text-white">What's happening:</strong> A <strong class="text-red-500">Measurement (`M`) gate</strong> is applied to that qubit. This forces it to "choose" a square (e.g., it collapses to square A). Because of entanglement, this starts a chain reaction, collapsing all other moves in the cycle into solid 'X's and 'O's.
+                        </p>
+                    </div>
+                    
+                    <div class="bg-gray-900 p-4 rounded-lg flex items-center justify-center">
+                        <div class="circuit-gate gate-m">M</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW: Gemini Tutor Modal -->
+    <div id="tutor-modal" class="fixed inset-0 bg-black bg-opacity-75 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden transition-opacity duration-300">
+        <div class="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl border border-gray-700">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center p-5 border-b border-gray-700">
+                <h2 class="text-2xl font-bold text-gradient bg-gradient-to-r from-purple-400 via-pink-500 to-yellow-500">✨ Quantum Tutor</h2>
+                <button id="close-tutor-modal-button" class="text-gray-400 hover:text-white transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </button>
+            </div>
+            <!-- Modal Content -->
+            <div id="tutor-modal-content" class="p-6 md:p-8 max-h-[70vh] overflow-y-auto modal-content">
+                <!-- Loading Spinner -->
+                <div id="tutor-loading" class="flex flex-col items-center justify-center min-h-[200px]">
+                    <div class="spinner"></div>
+                    <p class="text-gray-400 mt-4">Consulting the quantum oracle...</p>
+                </div>
+                <!-- Response Area -->
+                <div id="tutor-response" class="text-gray-300 space-y-4" style="font-family: 'Inter', sans-serif; line-height: 1.6;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Game Logic -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Elements ---
+            const boardElement = document.getElementById('board');
+            const statusMessage = document.getElementById('status-message');
+            const helpButton = document.getElementById('help-button');
+            const helpModal = document.getElementById('help-modal');
+            const closeModalButton = document.getElementById('close-modal-button');
+            const circuitVisualizer = document.getElementById('circuit-visualizer');
+
+            // --- NEW: Gemini Tutor DOM Elements ---
+            const tutorButton = document.getElementById('tutor-button');
+            const tutorModal = document.getElementById('tutor-modal');
+            const closeTutorModalButton = document.getElementById('close-tutor-modal-button');
+            const tutorModalContent = document.getElementById('tutor-modal-content');
+            const tutorLoading = document.getElementById('tutor-loading');
+            const tutorResponse = document.getElementById('tutor-response');
+
+            // --- Game State Variables ---
+            let classicalBoard; 
+            let quantumMoves;   
+            let currentPlayer;
+            let moveCounter;
+            let gameState; 
+            let firstSelection; 
+            let currentCycle; 
+            let winner;
+            let gameIsOverAndAnimating = false; // NEW: Flag to prevent immediate reset
+
+            // --- Circuit State ---
+            // We need to track the state of our "circuit" for visualization
+            // This is an array of objects: { moveId, gates: ['H', 'CX_C', 'CX_T', 'M'] }
+            let circuitState = []; 
+            let cnotLinks = []; // Store CNOT links as [{fromMoveId, toMoveId}]
+
+            // --- Utility Functions ---
+            const getPlayerColor = (player) => (player === 'X' ? 'player-x' : 'player-o');
+            const getPlayerBorder = (player) => (player === 'X' ? 'border-x' : 'border-o');
+            const getGlowClass = (player) => (player === 'X' ? 'pulse-glow-x' : 'pulse-glow-o');
+
+            // --- Game Logic ---
+            function initGame() {
+                classicalBoard = Array(9).fill(null);
+                quantumMoves = [];
+                currentPlayer = 'X';
+                moveCounter = 1;
+                gameState = 'SELECT_FIRST';
+                firstSelection = null;
+                currentCycle = [];
+                winner = null;
+                circuitState = [];
+                cnotLinks = [];
+                gameIsOverAndAnimating = false; // NEW: Reset flag
+
+                // NEW: Hide win lines (they exist in HTML now)
+                document.getElementById('win-line-x').className = 'win-line win-line-x hidden';
+                document.getElementById('win-line-o').className = 'win-line win-line-o hidden';
+
+                render();
+            }
+
+            // --- Main Render Function (Board + Circuit) ---
+            function render() {
+                renderBoard();
+                renderCircuit();
+                updateStatusMessage();
+            }
+
+            /**
+             * Renders the 3x3 game board.
+             */
+            function renderBoard() {
+                // NEW: Get the dedicated container for squares
+                const squaresContainer = document.getElementById('squares-container');
+                squaresContainer.innerHTML = ''; // Clear only the squares, not the win lines
+
+                for (let i = 0; i < 9; i++) {
+                    const square = document.createElement('div');
+                    square.className = 'square w-28 h-28 md:w-36 md:h-36 bg-gray-800 rounded-lg shadow-inner relative flex items-center justify-center transition-all duration-200 cursor-pointer';
+                    square.dataset.index = i;
+
+                    // 1. Render Classical Marks
+                    if (classicalBoard[i]) {
+                        square.innerHTML = `<span class="text-7xl md:text-8xl font-black ${getPlayerColor(classicalBoard[i])} animate-flash-in">${classicalBoard[i]}</span>`;
+                        square.classList.add('cursor-not-allowed', 'bg-gray-700');
+                    } else {
+                        square.classList.add('hover:bg-gray-700');
+                    }
+                    
+                    // 2. Render Quantum Marks
+                    const movesInThisSquare = quantumMoves.filter(move => move.squares.includes(i));
+                    if (movesInThisSquare.length > 0) {
+                        const positions = ['top-2 left-2', 'top-2 right-2', 'bottom-2 left-2', 'bottom-2 right-2'];
+
+                        movesInThisSquare.forEach((move, index) => {
+                            const qMoveElement = document.createElement('div');
+                            const moveId = move.id;
+                            const isEntangled = currentCycle.includes(moveId);
+
+                            qMoveElement.className = `quantum-move absolute ${positions[index % 4]} ${getPlayerColor(move.player)} font-bold text-base md:text-lg p-1 rounded-md transition-all duration-300`;
+                            qMoveElement.textContent = `${move.player.toLowerCase()}${move.moveNumber}`;
+                            qMoveElement.dataset.moveId = moveId;
+                            
+                            if (gameState === 'MEASURE' && isEntangled) {
+                                qMoveElement.classList.add('cursor-pointer', 'z-10', 'bg-gray-900', 'transform', 'scale-110', getGlowClass(move.player));
+                                qMoveElement.title = `Click to measure move ${move.player}${move.moveNumber}`;
+                            } else {
+                                qMoveElement.classList.add('opacity-70');
+                            }
+                            square.appendChild(qMoveElement);
+                        });
+                    }
+
+                    // 3. Render Selection Highlight
+                    if (gameState === 'SELECT_SECOND' && firstSelection === i) {
+                        square.classList.add('ring-4', 'ring-offset-2', 'ring-offset-gray-900', 'ring-yellow-400');
+                    }
+                    
+                    // NEW: Append to the squares container
+                    squaresContainer.appendChild(square);
+                }
+
+                // NEW: Remove the old code that created win lines here.
+                // They are now in the static HTML.
+            }
+
+            /**
+             * NEW: Renders the quantum circuit visualizer.
+             */
+            function renderCircuit() {
+                circuitVisualizer.innerHTML = ''; // Clear circuit
+                
+                // Keep track of DOM elements for CNOT lines
+                const rowElements = {}; 
+                const gateElements = {};
+
+                if (circuitState.length === 0) {
+                    circuitVisualizer.innerHTML = '<p class="text-gray-500">The circuit is empty. Make a quantum move!</p>';
+                    return;
+                }
+
+                // First pass: create rows and gates
+                circuitState.forEach((qubit, index) => {
+                    const move = quantumMoves.find(m => m.id === qubit.moveId);
+                    if (!move) return;
+
+                    const row = document.createElement('div');
+                    row.className = 'relative h-16 flex items-center';
+                    row.id = `qrow-${move.id}`;
+                    
+                    // Qubit label
+                    const label = document.createElement('div');
+                    label.className = `w-20 font-mono text-sm ${getPlayerColor(move.player)}`;
+                    label.textContent = `q${index}: |${move.player.toLowerCase()}${move.moveNumber}⟩`;
+                    row.appendChild(label);
+
+                    // Circuit line
+                    const line = document.createElement('div');
+                    line.className = 'circuit-line ml-20';
+                    row.appendChild(line);
+
+                    // Gates container
+                    const gatesContainer = document.createElement('div');
+                    gatesContainer.className = 'absolute left-20 ml-8 flex items-center space-x-4 h-full';
+                    row.appendChild(gatesContainer);
+                    
+                    gateElements[move.id] = {};
+
+                    qubit.gates.forEach((gateType, gateIndex) => {
+                        const gateEl = document.createElement('div');
+                        gateEl.id = `gate-${move.id}-${gateIndex}`;
+                        
+                        switch (gateType) {
+                            case 'H':
+                                gateEl.className = 'circuit-gate gate-h';
+                                gateEl.textContent = 'H';
+                                break;
+                            case 'CX_C':
+                                gateEl.className = 'gate-cx-control';
+                                break;
+                            case 'CX_T':
+                                gateEl.className = 'gate-cx-target';
+                                gateEl.textContent = '+';
+                                break;
+                            case 'M':
+                                gateEl.className = 'circuit-gate gate-m';
+                                gateEl.textContent = 'M';
+                                break;
+                        }
+                        gatesContainer.appendChild(gateEl);
+                        gateElements[move.id][gateIndex] = gateEl;
+                    });
+                    
+                    // --- NEW: Add clickable M gate if in cycle ---
+                    if (gameState === 'MEASURE' && currentCycle.includes(move.id)) {
+                        const measureGateEl = document.createElement('div');
+                        measureGateEl.className = 'circuit-gate gate-m pulse-glow-m clickable-measure-gate';
+                        measureGateEl.textContent = 'M';
+                        measureGateEl.dataset.moveId = move.id;
+                        measureGateEl.title = `Click to measure move ${move.player}${move.moveNumber}`;
+                        gatesContainer.appendChild(measureGateEl);
+                    }
+                    
+                    circuitVisualizer.appendChild(row);
+                    rowElements[move.id] = row;
+                });
+
+                // Second pass: draw CNOT lines (needs elements to be in DOM)
+                cnotLinks.forEach(link => {
+                    const fromGate = document.getElementById(`gate-${link.fromMoveId}-${link.fromGateIndex}`);
+                    const toGate = document.getElementById(`gate-${link.toMoveId}-${link.toGateIndex}`);
+                    
+                    if (fromGate && toGate) {
+                        const fromRect = fromGate.getBoundingClientRect();
+                        const toRect = toGate.getBoundingClientRect();
+                        const circuitRect = circuitVisualizer.getBoundingClientRect();
+                        
+                        const line = document.createElement('div');
+                        line.className = 'cnot-line';
+                        
+                        const top = Math.min(fromRect.top, toRect.top) - circuitRect.top + (fromRect.height / 2);
+                        const left = fromRect.left - circuitRect.left + (fromRect.width / 2) - 1; // -1 for line width
+                        const height = Math.abs(fromRect.top - toRect.top);
+                        
+                        line.style.top = `${top}px`;
+                        line.style.left = `${left}px`;
+                        line.style.height = `${height}px`;
+                        
+                        circuitVisualizer.appendChild(line);
+                    }
+                });
+            }
+
+
+            /**
+             * Updates the text in the status bar based on game state.
+             */
+            function updateStatusMessage() {
+                const playerSpan = `<span class="${getPlayerColor(currentPlayer)} font-bold">${currentPlayer}</span>`;
+                switch (gameState) {
+                    case 'SELECT_FIRST':
+                        statusMessage.innerHTML = `Player ${playerSpan}: Select your first square.`;
+                        break;
+                    case 'SELECT_SECOND':
+                        statusMessage.innerHTML = `Player ${playerSpan}: Select 2nd square (Applies <span class="text-blue-400 font-bold">H</span> gate).`;
+                        break;
+                    case 'MEASURE':
+                        const measurePlayerSpan = `<span class="${getPlayerColor(currentPlayer)} font-bold">${currentPlayer}</span>`;
+                        statusMessage.innerHTML = `Entanglement! Player ${measurePlayerSpan}, click a glowing move to <span class="text-red-500 font-bold">Measure</span>.`;
+                        break;
+                    case 'GAME_OVER':
+                        // NEW: Handle 'Both' as a winner
+                        if (winner === 'Both') {
+                            statusMessage.innerHTML = `Simultaneous Win! It's a Quantum Draw! Click to reset.`;
+                        } else if (winner) {
+                            statusMessage.innerHTML = `Player <span class="${getPlayerColor(winner)} font-bold">${winner}</span> wins! Click board to reset.`;
+                        } else {
+                            statusMessage.innerHTML = `It's a draw! Click board to reset.`;
+                        }
+                        break;
+                }
+            }
+
+            /**
+             * Main event handler for clicking on the board.
+             */
+            function handleBoardClick(e) {
+                if (gameState === 'GAME_OVER') {
+                    // NEW: Check flag to prevent reset during animation
+                    if (!gameIsOverAndAnimating) {
+                        initGame();
+                    }
+                    return;
+                }
+
+                const quantumMoveElement = e.target.closest('.quantum-move');
+                const squareElement = e.target.closest('.square');
+
+                if (gameState === 'MEASURE') {
+                    if (quantumMoveElement) {
+                        const moveId = quantumMoveElement.dataset.moveId;
+                        if (currentCycle.includes(moveId)) {
+                            // Add 'M' gate to circuit
+                            const circuitRow = circuitState.find(q => q.moveId === moveId);
+                            if (circuitRow && !circuitRow.gates.includes('M')) {
+                                circuitRow.gates.push('M');
+                            }
+                            
+                            collapseCycle(moveId);
+                        }
+                    } else {
+                        statusMessage.innerHTML = `Please click one of the <strong class="text-yellow-400">glowing moves</strong> to measure.`;
+                    }
+                    return;
+                }
+
+                if (squareElement) {
+                    const index = parseInt(squareElement.dataset.index);
+
+                    if (classicalBoard[index]) {
+                        statusMessage.innerHTML = `Square ${index} is already classical!`;
+                        setTimeout(updateStatusMessage, 1500);
+                        return;
+                    }
+
+                    if (gameState === 'SELECT_FIRST') {
+                        firstSelection = index;
+                        gameState = 'SELECT_SECOND';
+                        render();
+                    } else if (gameState === 'SELECT_SECOND') {
+                        if (index === firstSelection) {
+                            statusMessage.innerHTML = `Cannot select the same square twice.`;
+                            setTimeout(updateStatusMessage, 1500);
+                            return;
+                        }
+                        addQuantumMove(firstSelection, index);
+                    }
+                }
+            }
+
+            /**
+             * NEW: Event handler for clicking on the circuit.
+             */
+            function handleCircuitClick(e) {
+                if (gameState !== 'MEASURE') {
+                    return; // Only active during measurement
+                }
+
+                const measureGateElement = e.target.closest('.clickable-measure-gate');
+                
+                if (measureGateElement) {
+                    const moveId = measureGateElement.dataset.moveId;
+                    
+                    if (moveId && currentCycle.includes(moveId)) {
+                        // Add 'M' gate to circuit state for the render
+                        const circuitRow = circuitState.find(q => q.moveId === moveId);
+                        if (circuitRow && !circuitRow.gates.includes('M')) {
+                            circuitRow.gates.push('M');
+                        }
+                        
+                        // Collapse the cycle
+                        collapseCycle(moveId);
+                    }
+                }
+            }
+
+            /**
+             * Adds a new quantum move and checks for cycles.
+             */
+            function addQuantumMove(sq1, sq2) {
+                const newMove = {
+                    player: currentPlayer,
+                    moveNumber: moveCounter,
+                    id: `${currentPlayer}-${moveCounter}`,
+                    squares: [sq1, sq2].sort((a, b) => a - b)
+                };
+                
+                // Add to circuit *before* adding to moves list
+                circuitState.push({ moveId: newMove.id, gates: ['H'] });
+                
+                const cycle = findCycle(newMove.squares, quantumMoves);
+                quantumMoves.push(newMove);
+
+                if (cycle.length > 0) {
+                    // Entanglement!
+                    currentCycle = [...cycle.map(move => move.id), newMove.id];
+                    gameState = 'MEASURE';
+                    
+                    // --- NEW: Add CNOTs to circuit ---
+                    const cycleMoves = [...cycle, newMove];
+                    // Link them up in a chain
+                    for(let i = 0; i < cycleMoves.length - 1; i++) {
+                        const moveA = cycleMoves[i];
+                        const moveB = cycleMoves[i+1];
+                        
+                        const gateIndexA = addGateToCircuit(moveA.id, 'CX_C');
+                        const gateIndexB = addGateToCircuit(moveB.id, 'CX_T');
+                        
+                        cnotLinks.push({ 
+                            fromMoveId: moveA.id, fromGateIndex: gateIndexA,
+                            toMoveId: moveB.id, toGateIndex: gateIndexB
+                        });
+                    }
+                    // Optional: Link last back to first for GHZ
+                    if (cycleMoves.length > 2) {
+                        const moveA = cycleMoves[cycleMoves.length - 1];
+                        const moveB = cycleMoves[0];
+                        
+                        const gateIndexA = addGateToCircuit(moveA.id, 'CX_C');
+                        const gateIndexB = addGateToCircuit(moveB.id, 'CX_T');
+                        
+                        cnotLinks.push({ 
+                            fromMoveId: moveA.id, fromGateIndex: gateIndexA,
+                            toMoveId: moveB.id, toGateIndex: gateIndexB
+                        });
+                    }
+
+                } else {
+                    // No cycle, normal turn
+                    currentPlayer = (currentPlayer === 'X') ? 'O' : 'X';
+                    moveCounter++;
+                    gameState = 'SELECT_FIRST';
+                }
+                
+                firstSelection = null;
+                render();
+            }
+
+            function addGateToCircuit(moveId, gateType) {
+                const qubit = circuitState.find(q => q.moveId === moveId);
+                if (qubit) {
+                    qubit.gates.push(gateType);
+                    return qubit.gates.length - 1; // Return the index of the new gate
+                }
+                return -1;
+            }
+
+            /**
+             * Finds a cycle in the graph of quantum moves. (Unchanged)
+             */
+            function findCycle(newMoveSquares, existingMoves) {
+                const [start, end] = newMoveSquares;
+                const graph = {};
+                for (const move of existingMoves) {
+                    const [u, v] = move.squares;
+                    if (!graph[u]) graph[u] = [];
+                    if (!graph[v]) graph[v] = [];
+                    graph[u].push({ node: v, move }); 
+                    graph[v].push({ node: u, move });
+                }
+
+                const queue = [[start, []]]; 
+                const visited = new Set([start]);
+                const paths = {};
+                paths[start] = [];
+
+                while (queue.length > 0) {
+                    const [currentNode, path] = queue.shift();
+                    
+                    if (currentNode === end) {
+                        return path; // Found a path!
+                    }
+
+                    if (graph[currentNode]) {
+                        for (const neighbor of graph[currentNode]) {
+                            // Check if move is already in path to avoid trivial loops
+                            if (!path.find(p => p.id === neighbor.move.id)) {
+                                const newPath = [...path, neighbor.move];
+                                // Check if we've visited the node *via a different path*
+                                if (!visited.has(neighbor.node)) {
+                                     visited.add(neighbor.node);
+                                     queue.push([neighbor.node, newPath]);
+                                }
+                            }
+                        }
+                    }
+                }
+                return []; // No path, no cycle
+            }
+
+
+            /**
+             * Collapses an entangled cycle. (Unchanged logic, just updates state)
+             */
+            function collapseCycle(measuredMoveId) {
+                const cycleMoves = quantumMoves.filter(m => currentCycle.includes(m.id));
+                const measuredMove = cycleMoves.find(m => m.id === measuredMoveId);
+
+                // 1. Simulate the measurement
+                const outcome = Math.random() < 0.5 ? 0 : 1;
+                let collapseToSquare = measuredMove.squares[outcome];
+                let otherSquare = measuredMove.squares[1 - outcome];
+                const collapseResults = {};
+
+                // 2. Propagate the collapse
+                if (classicalBoard[collapseToSquare] !== null) {
+                    collapseToSquare = otherSquare;
+                }
+                
+                collapseResults[collapseToSquare] = measuredMove.player;
+                
+                let propagationQueue = [[collapseToSquare, measuredMove]];
+                let visitedMoves = new Set([measuredMove.id]);
+
+                while (propagationQueue.length > 0) {
+                    const [currentSquare, prevMove] = propagationQueue.shift();
+
+                    const nextMove = cycleMoves.find(move => 
+                        !visitedMoves.has(move.id) && move.squares.includes(currentSquare)
+                    );
+
+                    if (nextMove) {
+                        visitedMoves.add(nextMove.id);
+                        const nextCollapseSquare = nextMove.squares[0] === currentSquare ? nextMove.squares[1] : nextMove.squares[0];
+
+                        if (collapseResults[nextCollapseSquare] || classicalBoard[nextCollapseSquare]) {
+                            propagationQueue.push([currentSquare, nextMove]);
+                        } else {
+                            collapseResults[nextCollapseSquare] = nextMove.player;
+                            propagationQueue.push([nextCollapseSquare, nextMove]);
+                        }
+                    }
+                }
+
+                // 3. Apply all collapse results to the classical board
+                for (const squareIndex in collapseResults) {
+                    classicalBoard[squareIndex] = collapseResults[squareIndex];
+                }
+
+                // 4. Clean up
+                // Remove all cycle moves from the quantum list
+                quantumMoves = quantumMoves.filter(m => !currentCycle.includes(m.id));
+                // Remove from circuit state
+                circuitState = circuitState.filter(q => !currentCycle.includes(q.moveId));
+                cnotLinks = cnotLinks.filter(l => !currentCycle.includes(l.fromMoveId));
+                currentCycle = [];
+
+                // 5. Check for winner
+                // NEW: Refactored win check
+                const winResults = checkWin();
+                const xWon = winResults.xWins.length > 0;
+                const oWon = winResults.oWins.length > 0;
+
+                if (xWon || oWon) {
+                    gameState = 'GAME_OVER';
+                    gameIsOverAndAnimating = true; // NEW: Set flag
+                    drawWinLines(winResults); // NEW: Call function to draw lines
+                    if (xWon && oWon) {
+                        winner = 'Both';
+                    } else if (xWon) {
+                        winner = 'X';
+                    } else {
+                        winner = 'O';
+                    }
+                    
+                    // NEW: After animation, allow reset
+                    setTimeout(() => {
+                        gameIsOverAndAnimating = false;
+                    }, 1000); // 1 second delay (animation is 0.5s)
+
+                } else if (classicalBoard.every(sq => sq !== null)) {
+                    gameState = 'GAME_OVER';
+                    winner = null;
+                } else {
+                    gameState = 'SELECT_FIRST';
+                    currentPlayer = (currentPlayer === 'X') ? 'O' : 'X';
+                    moveCounter++;
+                }
+
+                render();
+            }
+
+            /**
+             * Checks for a win condition on the classical board. (Unchanged)
+             */
+            function checkWin() {
+                // NEW: Refactored to return all win lines for both players
+                const winConditions = [
+                    ['win-line-row-0', [0, 1, 2]], ['win-line-row-1', [3, 4, 5]], ['win-line-row-2', [6, 7, 8]], // Rows
+                    ['win-line-col-0', [0, 3, 6]], ['win-line-col-1', [1, 4, 7]], ['win-line-col-2', [2, 5, 8]], // Cols
+                    ['win-line-diag-0', [0, 4, 8]], ['win-line-diag-1', [2, 4, 6]]             // Diagonals
+                ];
+
+                let xWins = [];
+                let oWins = [];
+
+                for (const [lineClass, [a, b, c]] of winConditions) {
+                    if (classicalBoard[a] && classicalBoard[a] === classicalBoard[b] && classicalBoard[a] === classicalBoard[c]) {
+                        if (classicalBoard[a] === 'X') {
+                            xWins.push(lineClass);
+                        } else {
+                            oWins.push(lineClass);
+                        }
+                    }
+                }
+                return { xWins, oWins };
+            }
+
+            // --- NEW: Function to draw win lines ---
+            function drawWinLines(winResults) {
+                // We just draw the first win line found for each player
+                if (winResults.xWins.length > 0) {
+                    const lineClass = winResults.xWins[0];
+                    const lineEl = document.getElementById('win-line-x');
+                    lineEl.className = `win-line win-line-x ${lineClass}`;
+                    // Force reflow to animate
+                    void lineEl.offsetWidth;
+                    lineEl.classList.add('win-line-show');
+                }
+                if (winResults.oWins.length > 0) {
+                    const lineClass = winResults.oWins[0];
+                    const lineEl = document.getElementById('win-line-o');
+                    lineEl.className = `win-line win-line-o ${lineClass}`;
+                    // Force reflow to animate
+                    void lineEl.offsetWidth;
+                    lineEl.classList.add('win-line-show');
+                }
+            }
+
+
+            // --- NEW: Gemini API Functions ---
+
+            /**
+             * Handles the click on the "Quantum Tutor" button.
+             */
+            async function handleTutorClick() {
+                // 1. Show modal in loading state
+                tutorResponse.innerHTML = '';
+                tutorLoading.classList.remove('hidden');
+                tutorResponse.classList.add('hidden');
+                tutorModal.classList.remove('hidden');
+
+                // 2. Define the prompts
+                const systemPrompt = "You are an expert quantum physics teacher, specializing in making complex topics simple. You are explaining a game of Quantum Tic-Tac-Toe to a beginner. Your tone is friendly and encouraging.";
+                
+                // 3. Serialize the game state
+                const gameStateData = {
+                    currentPlayer,
+                    gameState,
+                    classicalBoard,
+                    quantumMoves,
+                    entangledCycle: currentCycle
+                };
+
+                const userQuery = `Here is the current state of a Quantum Tic-Tac-Toe game:
+${JSON.stringify(gameStateData, null, 2)}
+
+Please explain what is happening on this board in 2-3 simple paragraphs.
+1. First, describe the 'classical' situation (the solid X's and O's).
+2. Second, describe the 'quantum' situation (the 'spooky' moves in superposition, like x1, o2).
+3. Third, and most importantly:
+   - If there IS an entanglement (the 'entangledCycle' array is not empty), explain what that means, which moves are linked, and what will happen when one is measured.
+   - If there is NO entanglement, explain what the current player ("${currentPlayer}") should try to do (e.g., 'try to create a cycle' or 'block an opponent's cycle').
+
+Keep the explanation clear and focus on the *why*. Format the response with paragraphs.`;
+
+                try {
+                    // 4. Call Gemini API
+                    const explanation = await callGeminiAPI(systemPrompt, userQuery);
+                    
+                    // 5. Display response
+                    tutorResponse.innerHTML = explanation.replace(/\n/g, '<br />'); // Basic formatting
+                    tutorLoading.classList.add('hidden');
+                    tutorResponse.classList.remove('hidden');
+
+                } catch (error) {
+                    console.error("Error calling Gemini API:", error);
+                    tutorResponse.innerHTML = `<p class="text-red-400">Sorry, the Quantum Tutor is unavailable right now. Please try again later.</p><p class="text-gray-500 mt-2 text-sm">${error.message}</p>`;
+                    tutorLoading.classList.add('hidden');
+                    tutorResponse.classList.remove('hidden');
+                }
+            }
+
+            /**
+             * Calls the Gemini API with exponential backoff.
+             */
+            async function callGeminiAPI(systemPrompt, userQuery, retries = 3, delay = 1000) {
+                const apiKey = ""; // Will be populated by the environment
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+                const payload = {
+                    contents: [{ parts: [{ text: userQuery }] }],
+                    systemInstruction: {
+                        parts: [{ text: systemPrompt }]
+                    },
+                };
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        if (response.status === 429 && retries > 0) {
+                            // Throttled, retry with backoff
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            return callGeminiAPI(systemPrompt, userQuery, retries - 1, delay * 2);
+                        }
+                        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+                    }
+
+                    const result = await response.json();
+                    
+                    if (result.candidates && result.candidates[0].content?.parts?.[0]?.text) {
+                        return result.candidates[0].content.parts[0].text;
+                    } else {
+                        // Handle cases where the response structure is unexpected or content is missing
+                        if (result.candidates && result.candidates[0].finishReason) {
+                            throw new Error(`API call finished with reason: ${result.candidates[0].finishReason}`);
+                        }
+                        throw new Error("Invalid response structure from Gemini API.");
+                    }
+
+                } catch (error) {
+                    if (retries > 0) {
+                        // Retry on network errors
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        return callGeminiAPI(systemPrompt, userQuery, retries - 1, delay * 2);
+                    }
+                    console.error("Final attempt to call Gemini API failed:", error);
+                    throw error; // Final attempt failed
+                }
+            }
+
+            // --- Modal Event Listeners ---
+            helpButton.addEventListener('click', () => {
+                helpModal.classList.remove('hidden');
+            });
+            closeModalButton.addEventListener('click', () => {
+                helpModal.classList.add('hidden');
+            });
+            helpModal.addEventListener('click', (e) => {
+                if (e.target === helpModal) {
+                    helpModal.classList.add('hidden');
+                }
+            });
+            
+            // --- NEW: Gemini Tutor Event Listeners ---
+            tutorButton.addEventListener('click', handleTutorClick);
+            closeTutorModalButton.addEventListener('click', () => {
+                tutorModal.classList.add('hidden');
+            });
+            tutorModal.addEventListener('click', (e) => {
+                if (e.target === tutorModal) {
+                    tutorModal.classList.add('hidden');
+                }
+            });
+
+            // --- Start Game ---
+            boardElement.addEventListener('click', handleBoardClick);
+            circuitVisualizer.addEventListener('click', handleCircuitClick); // <-- NEW LISTENER
+            initGame();
+        });
+    </script>
+</body>
+</html>
