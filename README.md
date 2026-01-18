@@ -65,7 +65,7 @@ Planned deployment on **Firebase Hosting** for public access.
 
 1. **Download the file**
    ```
-   quantum_tic_tac_toe.html
+   QUANTUM_TIC_TAC_TOE.html
    ```
 
 2. **Run the game**
@@ -83,7 +83,7 @@ Planned deployment on **Firebase Hosting** for public access.
 
 ```
 Quantum Tic-Tac-Toe/
-├── quantum_tic_tac_toe.html   # HTML, CSS, JS, game logic
+├── QUANTUM_TIC_TAC_TOE.html   # HTML, CSS, JS, game logic
 └── README.md                 # Documentation
 ```
 
