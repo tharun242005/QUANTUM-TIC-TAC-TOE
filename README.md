@@ -84,7 +84,10 @@ Planned deployment on **Firebase Hosting** for public access.
 ```
 Quantum Tic-Tac-Toe/
 ├── QUANTUM_TIC_TAC_TOE.html   # HTML, CSS, JS, game logic
-└── README.md                 # Documentation
+└── README.md                   # Documentation
+└── PROTOTYPE_REPRESENTATION_1.png
+└── PROTOTYPE_REPRESENTATION_2.png
+└── PROTOTYPE_REPRESENTATION_3.png               
 ```
 
 ### Internal Code Architecture
